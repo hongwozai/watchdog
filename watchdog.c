@@ -248,6 +248,12 @@ int main(int argc, char *argv[])
             gProcArg[gProcPointer] = addarg(gProcArg[gProcPointer], optarg);
             break;
         case 'd':
+            /* nochidr */
+            /**
+             * 1. nochdir -> chdir to /
+             * 2. noclose -> close stdout/stderr
+                  (0 -> stdout/stderr redirect /dev/null)
+             */
             daemon(1, 1);
             break;
         case 's':
