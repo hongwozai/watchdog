@@ -67,7 +67,7 @@ int findpid(pid_t pid)
 
 /**
  * SIGCHLD信号处理函数，避免僵尸进程出现
- * 并非实时信号，在一些情况下可能会丢信号而出现僵尸进程
+ * TODO: 并非实时信号，在一些情况(监视进程过多的时候)下可能会丢信号而出现僵尸进程并且无法重启
  */
 void waitsig(int signum)
 {
@@ -133,8 +133,12 @@ void killsig(int signum)
  */
 pid_t exec(const char *path, char *args[])
 {
+    char *empty[] = { NULL };
     pid_t ret = fork();
 
+    if (args == NULL) {
+        args = empty;
+    }
     if (ret < 0) {
         /* fork error */
         LOG("fork: %s\n", strerror(errno));
@@ -189,12 +193,10 @@ char **addarg(char **pointer, char *arg)
     }
 
     /* 申请，复制，释放 */
-    newpointer = malloc(sizeof(char*) * (num + 1) + sizeof(NULL));
+    newpointer = realloc(pointer, sizeof(char*) * (num + 1) + sizeof(NULL));
     if (!newpointer) {
         return NULL;
     }
-    memcpy(newpointer, pointer, sizeof(char*) * num);
-    free(pointer);
 
     newpointer[num] = arg;
     newpointer[num + 1] = NULL;
@@ -226,7 +228,7 @@ int main(int argc, char *argv[])
             /* LOG("%s\n", optarg); */
             gProcPointer++;
 
-            if (gProcPointer >= MAX_PROCESS){
+            if (gProcPointer >= MAX_PROCESS) {
                 break;
             }
 
@@ -236,7 +238,7 @@ int main(int argc, char *argv[])
         case 'e':
             /* 执行命令的一个参数 */
             /* LOG("%s\n", optarg); */
-            if (gProcPointer >= MAX_PROCESS){
+            if (gProcPointer >= MAX_PROCESS) {
                 break;
             }
             gProcArg[gProcPointer] = addarg(gProcArg[gProcPointer], optarg);
