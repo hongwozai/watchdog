@@ -221,6 +221,10 @@ int main(int argc, char *argv[])
     signal(SIGINT, killsig);
     signal(SIGCHLD, waitsig);
 
+    /**
+     * 分析参数，解析出运行的命令
+     * 对于大于MAX_PROCESS的进程，不进行监视
+     */
     while ((opt = getopt(argc, argv, "a:e:d")) != -1) {
         /* LOG("opt: %c\n", opt); */
         switch (opt) {
