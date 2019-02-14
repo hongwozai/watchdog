@@ -29,6 +29,7 @@ enum {
     SUCCESS = 0,
     ERROR_ARGS = -1,
     ERROR_SYSTEM = -2,
+    ERROR_NO_CHILD = -3
 };
 
 /**
@@ -65,32 +66,13 @@ int findpid(pid_t pid)
     return -1;
 }
 
-/**
- * SIGCHLD信号处理函数，避免僵尸进程出现
- * TODO: 并非实时信号，在一些情况(监视进程过多的时候)下可能会丢信号而出现僵尸进程并且无法重启
- */
-void waitsig(int signum)
+void resetchild(pid_t pid)
 {
-    pid_t pid = 0;
-    int wstatus = 0;
     int index = 0;
-
-    if (signum != SIGCHLD) {
-        return;
-    }
-
-    pid = waitpid(-1, &wstatus, 0);
-    if (pid < 0) {
-        LOG("waitpid error: %s\n", strerror(errno));
-        return;
-    }
-    LOG("current parent pid: %d, dead child pid: %d\n", getpid(), pid);
-
-
-    sleep(gInterval);
     /* 这里重启进程 */
     index = findpid(pid);
     if (index < 0) {
+        /* LOG("not find, program error(pid: %d)\n", pid); */
         return;
     }
 
@@ -100,11 +82,40 @@ void waitsig(int signum)
     }
 
     gProcPid[index] = pid;
-    LOG("new create process pid: %d\n", pid);
+    LOG("reset process pid: %d (%s ...)\n", pid, gProcCmd[index]);
+}
+
+/**
+ * waitloop
+ * 不断监视子进程进行重启，如果没有子进程会返回错误
+ */
+int waitloop()
+{
+    pid_t pid = 0;
+    int wstatus = 0;
+
+    for (;;) {
+        /* 有子进程且正常的时候会阻塞在这 */
+        pid = waitpid(-1, &wstatus, 0);
+        if (pid < 0) {
+            if (errno == ECHILD) {
+                /* 没有子进程 */
+                LOG("dont have child process.\n");
+                return ERROR_NO_CHILD;
+            }
+            LOG("waitpid error: %s, wstatus: %d\n", strerror(errno), wstatus);
+            return ERROR_SYSTEM;
+        }
+        LOG("current parent pid: %d, dead child pid: %d\n", getpid(), pid);
+
+        sleep(gInterval);
+        resetchild(pid);
+    }
 }
 
 /**
  * 当接收到停止的信号时，杀死子进程
+ * 情况一：子进程先接收到kill信号的情况下，会先重启子进程，然后才杀掉重启后子进程
  */
 void killsig(int signum)
 {
@@ -219,13 +230,14 @@ int main(int argc, char *argv[])
     int opt = 0;
 
     signal(SIGINT, killsig);
-    signal(SIGCHLD, waitsig);
+    /* 这里忽略CHLD，避免处理信号丢失问题 */
+    signal(SIGCHLD, SIG_IGN);
 
     /**
      * 分析参数，解析出运行的命令
      * 对于大于MAX_PROCESS的进程，不进行监视
      */
-    while ((opt = getopt(argc, argv, "a:e:d")) != -1) {
+    while ((opt = getopt(argc, argv, "A:a:e:d")) != -1) {
         /* LOG("opt: %c\n", opt); */
         switch (opt) {
         case 'a':
@@ -261,7 +273,7 @@ int main(int argc, char *argv[])
             break;
         default:
             LOG("help: \n");
-            LOG("watchdog -a 'ls' -a 'sleep 500'\n");
+            LOG("watchdog -a 'ls' -a sleep -e 500\n");
             freearg();
             exit(ERROR_ARGS);
         }
@@ -286,8 +298,5 @@ int main(int argc, char *argv[])
     }
 
     /* 无限循环 */
-    for (;;) {
-        sleep(10);
-    }
-    return 0;
+    return waitloop();
 }
