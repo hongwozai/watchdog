@@ -137,6 +137,9 @@ void killsig(int signum)
     exit(0);
 }
 
+/* 忽略SIGCHLD信号 */
+void freechild(int signum) {}
+
 /**
  * 创建子进程并执行命令
  * @return 返回大于0的值为创建的子进程pid
@@ -230,8 +233,8 @@ int main(int argc, char *argv[])
     int opt = 0;
 
     signal(SIGINT, killsig);
-    /* 这里忽略CHLD，避免处理信号丢失问题 */
-    signal(SIGCHLD, SIG_IGN);
+    /* 这里忽略CHLD（但是使用自己定义的忽略函数，不使用SIG_IGN），避免处理信号丢失问题 */
+    signal(SIGCHLD, freechild);
 
     /**
      * 分析参数，解析出运行的命令
